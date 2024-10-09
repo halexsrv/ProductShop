@@ -1,0 +1,6 @@
+﻿services:
+  productshop:
+    image: productshop
+    build:
+      context: .
+      dockerfile: ProductShop/Dockerfile
