@@ -1,16 +1,25 @@
 @ProductShop_HostAddress = http://localhost:5099
 
-###
+### get all products
 GET {{ProductShop_HostAddress}}/api/Category/
 Accept: application/json
-###
+
+### get product by id
 GET {{ProductShop_HostAddress}}/api/Category/2
 Accept: application/json
-###
+
+### add one product
 POST {{ProductShop_HostAddress}}/api/Category/
 Content-Type: application/json
 
 {
-  "Name": "Android20"
+  "Name": "smart50"
 }
-###
+
+### update one product
+PUT {{ProductShop_HostAddress}}/api/Category/2
+Content-Type: application/json
+
+{
+  "Name": "Android30"
+}

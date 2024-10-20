@@ -1,70 +1,104 @@
 using System.Data;
 using Dapper;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ProductShop.Models;
 
-namespace ProductShop.Controllers
+namespace ProductShop.Controllers;
+
+[Route("api/[controller]")]
+[ApiController]
+public class CategoryController : ControllerBase
 {
-    [Route("api/[controller]")]
-    [ApiController]
-    public class CategoryController : ControllerBase
+    private readonly IDbConnection _connection;
+
+    public CategoryController(IDbConnection connection)
     {
-        private readonly IDbConnection _connection;
+        _connection = connection;
+    }
 
-        public CategoryController(IDbConnection connection)
-        {
-            _connection = connection;
-        }
-        
-        // GET: api/<CategoryController>
-        [HttpGet]
-        public IEnumerable<Category> Get()
-        {
-            var categories = _connection.Query<Category>("SELECT * FROM Category");
+    // GET: api/<CategoryController>
+    [HttpGet]
+    public ActionResult Get()
+    {
+        var categories = _connection.Query<Category>("SELECT * FROM Category");
 
-            return categories;
-        }
+        return Ok(categories);
+    }
 
-        // GET api/<CategoryController>/5
-        [HttpGet("{id}")]
-        public Category Get(int id)
-        {
-            var parameters = new { Id = id };
-            var sql = "SELECT * FROM Category WHERE Id = @id";
-            var category = _connection.Query<Category>(sql, parameters).FirstOrDefault();
-            
-            return category;
-        }
+    // GET api/<CategoryController>/5
+    [HttpGet("{id}")]
+    public ActionResult Get(int id)
+    {
+        var parameters = new DynamicParameters();
+        parameters.Add("@id", id);
+        var category = _connection.QueryFirstOrDefault<Category>("SELECT * FROM Category WHERE Id = @id", parameters);
 
-        // POST api/<CategoryController>
-        [HttpPost]
-        public ActionResult Post([FromBody] Category category)
-        {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
+        if (category == null) return NotFound();
 
-            var parameters = new { Name = category.Name };
-            var sql = "INSERT INTO Category(Name) VALUES(@Name)";
-            var result = _connection.Query<Category>(sql, parameters).FirstOrDefault();
-            
-            Console.WriteLine(result);
+        return Ok(category);
+    }
 
-            return Ok();
-        }
+    // POST api/<CategoryController>
+    [HttpPost]
+    public ActionResult Post([FromBody] Category category)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        // PUT api/<CategoryController>/5
-        [HttpPut("{id}")]
-        public void Put(int id, [FromBody] string value)
-        {
-        }
+        // execute select query to check if category already exists
+        var existParameters = new DynamicParameters();
+        existParameters.Add("@Name", category.Name);
+        var existSql = "SELECT * FROM Category WHERE Name = @Name";
+        var existCategory = _connection.Query<Category>(existSql, existParameters).FirstOrDefault();
+        if (existCategory != null) return BadRequest(new { message = "Category already exists" });
 
-        // DELETE api/<CategoryController>/5
-        [HttpDelete("{id}")]
-        public void Delete(int id)
-        {
-        }
+        // return the id of the newly inserted category
+        var parameters = new DynamicParameters();
+        parameters.Add("@Name", category.Name);
+        var sql = "INSERT INTO Category (Name) VALUES (@Name); SELECT CAST(SCOPE_IDENTITY() as int)";
+        var newCategoryId = _connection.QueryFirstOrDefault<int>(sql, parameters);
+        category.Id = newCategoryId;
+
+        return CreatedAtAction(nameof(Get), new { id = newCategoryId }, category);
+    }
+
+    // PUT api/<CategoryController>/5
+    [HttpPut("{id}")]
+    public ActionResult Put(int id, [FromBody] Category category)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        // execute select query to check if category already exists
+        var existParameters = new DynamicParameters();
+        existParameters.Add("@Name", category.Name);
+        var existSql = "SELECT * FROM Category WHERE Name = @Name";
+        var existCategory = _connection.Query<Category>(existSql, existParameters).FirstOrDefault();
+        if (existCategory != null) return BadRequest(new { message = "Category already exists" });
+
+        var parameters = new DynamicParameters();
+        parameters.Add("@Id", id);
+        parameters.Add("@Name", category.Name);
+        var sql = "UPDATE Category SET Name = @Name WHERE Id = @Id";
+        _connection.Execute(sql, parameters);
+
+        return Ok();
+    }
+
+    // DELETE api/<CategoryController>/5
+    [HttpDelete("{id}")]
+    public ActionResult Delete(int id)
+    {
+        // execute select query to check if category exists
+        var existParameters = new DynamicParameters();
+        existParameters.Add("@Id", id);
+        var existSql = "SELECT * FROM Category WHERE Id = @Id";
+        var existCategory = _connection.Query<Category>(existSql, existParameters).FirstOrDefault();
+        if (existCategory == null) return BadRequest(new { message = "Category does not exist" });
+
+        var parameters = new DynamicParameters();
+        parameters.Add("@Id", id);
+        var sql = "DELETE FROM Category WHERE Id = @Id";
+        _connection.Execute(sql, parameters);
+
+        return Ok();
     }
 }

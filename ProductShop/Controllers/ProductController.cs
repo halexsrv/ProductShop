@@ -18,36 +18,96 @@ public class ProductController : ControllerBase
 
     // GET: api/<ProductController>
     [HttpGet]
-    public IEnumerable<Product> Get()
+    public ActionResult Get()
     {
         var products = _connection.Query<Product>("SELECT * FROM Product");
 
-        return products;
+        return Ok(products);
     }
 
 
     // GET api/<ProductController>/5
     [HttpGet("{id}")]
-    public string Get(int id)
+    public ActionResult Get(int id)
     {
-        return "value";
+        var parameters = new DynamicParameters();
+        parameters.Add("@id", id);
+        var product = _connection.QueryFirstOrDefault<Product>("SELECT * FROM Product WHERE Id = @id", parameters);
+
+        if (product == null) return NotFound();
+
+        return Ok(product);
     }
 
     // POST api/<ProductController>
     [HttpPost]
-    public void Post([FromBody] string value)
+    public ActionResult Post([FromBody] Product product)
     {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        // execute select query to check if product already exists
+        var existParameters = new DynamicParameters();
+        existParameters.Add("@Name", product.Name);
+
+        var existSql = "SELECT * FROM Product WHERE Name = @Name";
+
+        var existProduct = _connection.Query<Product>(existSql, existParameters).FirstOrDefault();
+        if (existProduct != null) return BadRequest(new { message = "Product already exists" });
+
+        // return the id of the newly inserted product
+        var parameters = new DynamicParameters();
+        parameters.Add("@Name", product.Name);
+        parameters.Add("@CategoryId", product.CategoryId);
+        var sql =
+            "INSERT INTO Product (Name, CategoryId) VALUES (@Name, @CategoryId); SELECT CAST(SCOPE_IDENTITY() as int)";
+        var newProductId = _connection.QueryFirstOrDefault<int>(sql, parameters);
+        product.Id = newProductId;
+
+        return CreatedAtAction(nameof(Get), new { id = newProductId }, product);
     }
 
     // PUT api/<ProductController>/5
     [HttpPut("{id}")]
-    public void Put(int id, [FromBody] string value)
+    public ActionResult Put(int id, [FromBody] Product product)
     {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        // execute select query to check if product already exists
+        var existParameters = new DynamicParameters();
+        existParameters.Add("@Name", product.Name);
+
+        var existSql = "SELECT * FROM Product WHERE Name = @Name";
+
+        var existProduct = _connection.Query<Product>(existSql, existParameters).FirstOrDefault();
+        if (existProduct != null) return BadRequest(new { message = "Product already exists" });
+
+        var parameters = new DynamicParameters();
+        parameters.Add("@Id", id);
+        parameters.Add("@Name", product.Name);
+        parameters.Add("@CategoryId", product.CategoryId);
+        var sql = "UPDATE Product SET Name = @Name, CategoryId = @CategoryId WHERE Id = @Id";
+        _connection.Execute(sql, parameters);
+
+        return Ok();
     }
 
     // DELETE api/<ProductController>/5
     [HttpDelete("{id}")]
-    public void Delete(int id)
+    public ActionResult Delete(int id)
     {
+        // execute select query to check if product exists
+        var existParameters = new DynamicParameters();
+        existParameters.Add("@Id", id);
+        var existSql = "SELECT * FROM Product WHERE Id = @Id";
+
+        var existProduct = _connection.Query<Product>(existSql, existParameters).FirstOrDefault();
+        if (existProduct == null) return NotFound(new { message = "Product not found" });
+
+        var parameters = new DynamicParameters();
+        parameters.Add("@Id", id);
+        var sql = "DELETE FROM Product WHERE Id = @Id";
+        _connection.Execute(sql, parameters);
+
+        return Ok();
     }
 }
